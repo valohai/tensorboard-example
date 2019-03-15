@@ -12,8 +12,12 @@ def create_valohai_log_snapshot(file_writer):
 
     file_writer.close()
     for filename in os.listdir(from_path):
+        # Move log file to VH_OUTPUTS_DIR so Valohai will know it needs to saved
         shutil.move(from_path + os.sep + filename, to_path + os.sep + filename)
+        # Change the file to read-only so Valohai will trigger upload immediately
+        # Without this, the upload would happen at the very end of the execution
         os.chmod(to_path + os.sep + filename, 292)
+    # Re-open file writer to start a new file
     file_writer.reopen()
 
 def create_incremental_folder(path):
@@ -37,6 +41,7 @@ with tf.Session() as sess:
         sess.run(init)
         summary = sess.run(myvar_summary)
         writer.add_summary(summary, step)
+        # Periodical snapshots allow us to use Tensorboard while the execution is still running
         if valohai:
             create_valohai_log_snapshot(writer)
         print('step: %i' % step)
