@@ -1,16 +1,15 @@
-import tensorflow as tf
 import time
+from math import sin
 
-tf.reset_default_graph()
-myvar = tf.get_variable('myvar', shape=[])
-myvar_summary = tf.summary.scalar(name='Myvar', tensor=myvar)
-init = tf.global_variables_initializer()
+import tensorflow as tf
 
-with tf.Session() as sess:
-    writer = tf.summary.FileWriter('./logs/run1', sess.graph)
+writer = tf.summary.create_file_writer('./logs/run1')
+
+with writer.as_default():
     for step in range(10):
-        sess.run(init)
-        summary = sess.run(myvar_summary)
-        writer.add_summary(summary, step)
-        print('step: %i' % step)
+        print(f'step: {step}')
+
+        tf.summary.scalar('myvar', sin(step), step=step)
+        writer.flush()
+
         time.sleep(0.1)

@@ -1,48 +1,59 @@
-import tensorflow as tf
-import numpy as np
-import shutil
 import os
+import shutil
 import time
+from math import sin
 
-def create_valohai_log_snapshot(file_writer):
-    from_path = file_writer.get_logdir()
-    to_path = os.getenv('VH_OUTPUTS_DIR')
-    if not os.path.exists(to_path):
-        os.makedirs(to_path)
+import tensorflow as tf
 
-    file_writer.close()
-    for filename in os.listdir(from_path):
-        # Move log file to VH_OUTPUTS_DIR so Valohai will know it needs to saved
-        shutil.move(from_path + os.sep + filename, to_path + os.sep + filename)
-        # Change the file to read-only so Valohai will trigger upload immediately
-        # Without this, the upload would happen at the very end of the execution
-        os.chmod(to_path + os.sep + filename, 292)
-    # Re-open file writer to start a new file
-    file_writer.reopen()
 
-def create_incremental_folder(path):
-    result = path + '_1'
-    i = 0
+def create_incremental_log_dir(path):
+    """Creates a log directory and returns the path"""
+    i = 1
+    result = f'{path}_{i}'
     while os.path.exists(result):
-        i += 1
-        result = path + '_%i' % i
+        i = i + 1
+        result = f'{path}_{i}'
     os.makedirs(result)
     return result
 
-valohai = True if os.getenv('VH_OUTPUTS_DIR') else False
-tf.reset_default_graph()
-myvar = tf.get_variable('myvar', shape=[])
-myvar_summary = tf.summary.scalar(name='Myvar', tensor=myvar)
-init = tf.global_variables_initializer()
 
-with tf.Session() as sess:
-    writer = tf.summary.FileWriter(create_incremental_folder('logs' + os.sep + 'local'), sess.graph)
-    for step in range(10):
-        sess.run(init)
-        summary = sess.run(myvar_summary)
-        writer.add_summary(summary, step)
-        # Periodical snapshots allow us to use Tensorboard while the execution is still running
-        if valohai:
-            create_valohai_log_snapshot(writer)
-        print('step: %i' % step)
-        time.sleep(1)
+def create_valohai_log_snapshot(logs_path, outputs_path):
+    """Uploads a snapshot of logs to Valohai"""
+    for filename in os.listdir(logs_path):
+        log_file = os.path.join(logs_path, filename)
+
+        # Append current time to log filename to make it unique and sortable
+        output_file = os.path.join(outputs_path, filename)
+
+        # Move log file to Valohai outputs folder to be saved
+        shutil.copy2(log_file, output_file)
+
+        # Change the log file to read-only
+        # causing Valohai to upload the file immediately
+        # instead of at the end of the execution
+        os.chmod(output_file, 292)
+
+
+# Get Valohai outputs directory path
+# which is by default /valohai/outputs
+valohai_outputs_path = os.getenv('VH_OUTPUTS_DIR')
+is_running_in_valohai = True if valohai_outputs_path else False
+
+logs_path = create_incremental_log_dir(os.path.join('logs', 'local'))
+
+for step in range(10):
+    print(f'step: {step}')
+
+    writer = tf.summary.create_file_writer(logs_path)
+    with writer.as_default():
+        # Save a data point for myvar at the current step
+        # with value sin(step) to plot something in our chart
+        tf.summary.scalar('myvar', sin(step), step=step)
+        writer.flush()
+
+        if is_running_in_valohai:
+            create_valohai_log_snapshot(logs_path, valohai_outputs_path)
+
+        writer.close()
+
+    time.sleep(1)
