@@ -33,6 +33,9 @@ def create_valohai_log_snapshot(logs_path, outputs_path):
         # instead of at the end of the execution
         os.chmod(output_file, 292)
 
+        # Remove the tmp file
+        os.remove(log_file)
+
 
 # Get Valohai outputs directory path
 # which is by default /valohai/outputs
@@ -43,8 +46,7 @@ logs_path = create_incremental_log_dir(os.path.join('logs', 'local'))
 
 for step in range(10):
     print(f'step: {step}')
-
-    writer = tf.summary.create_file_writer(logs_path)
+    writer = tf.summary.create_file_writer(logs_path, max_queue=1)
     with writer.as_default():
         # Save a data point for myvar at the current step
         # with value sin(step) to plot something in our chart
@@ -54,6 +56,5 @@ for step in range(10):
         if is_running_in_valohai:
             create_valohai_log_snapshot(logs_path, valohai_outputs_path)
 
-        writer.close()
-
+    writer.close()
     time.sleep(1)
